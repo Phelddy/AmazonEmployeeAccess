@@ -92,3 +92,47 @@ submission <- bind_cols(amazon_te %>% select(id), amazon_predictions$.pred_1)
 submission <- submission %>% rename("Id" = "id", "Action" = "...2")
 #writes onto a csv
 vroom_write(submission, "./AmazonEmployeeAccess/AmazonEmployeeAccess/submission.csv", col_names = TRUE, delim = ", ")
+
+##10/16/2023
+#Random Forests!!!
+tree_mod <- rand_forest(mtry = tune(),
+                        min_n = tune(),
+                        trees = 500) %>%
+  set_engine("ranger") %>%
+  set_mode("classification")
+
+
+##Workflow
+forest_workflow <- workflow() %>%
+  add_recipe(my_recipe) %>%
+  add_model(tree_mod)
+
+
+tuning_grid <- grid_regular(mtry(range = c(1, 15)),
+                            min_n(),
+                            levels = 2)
+
+folds <- vfold_cv(amazon_tr, v = 5, repeats = 1)
+
+CV_results <- forest_workflow %>%
+  tune_grid(resamples = folds,
+            grid = tuning_grid,
+            metrics = metric_set(roc_auc))
+
+bestTune <- CV_results %>%
+  select_best("roc_auc")
+
+final_wf <- forest_workflow %>%
+  finalize_workflow(bestTune) %>%
+  fit(data = amazon_tr)
+
+amazon_predictions <- final_wf %>% predict(new_data = amazon_te, type = "prob")
+
+#formats submissions properly
+submission <- bind_cols(amazon_te %>% select(id), amazon_predictions$.pred_1)
+submission <- submission %>% rename("Id" = "id", "Action" = "...2")
+#writes onto a csv
+vroom_write(submission, "./AmazonEmployeeAccess/AmazonEmployeeAccess/submission.csv", col_names = TRUE, delim = ", ")
+
+
+
